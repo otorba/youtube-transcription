@@ -40,7 +40,7 @@ Checks: `node --check` on every JS file, `node --test`. Nothing here can exercis
 ## YouTube hooks in use
 
 Status as of 2026-11-15. "Verified" means seen working in a signed-in Chrome session on live watch
-pages, with this code injected into the page and the button clicked for real.
+pages, with the extension loaded and the button clicked for real (the full manual checklist).
 
 | Hook | Used for | Status |
 | --- | --- | --- |
