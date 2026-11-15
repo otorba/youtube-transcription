@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Copy YouTube Transcript",
+  "version": "1.0.0",
+  "description": "One click copies the transcript of the current YouTube video to the clipboard.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/transcript.js", "src/content.js"],
+      "css": ["src/content.css"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ]
+}
