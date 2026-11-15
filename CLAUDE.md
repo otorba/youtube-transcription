@@ -38,7 +38,10 @@ Checks: `node --check` on every JS file, `node --test`. Nothing here can exercis
 - Button states: copy icon (idle, dimmed while busy, yellow when a second click is needed), green
   check (copied), yellow alert (no transcript), red alert (failed). The message is the tooltip, the
   `aria-label` and, after a click, the bubble above the button for 3 seconds.
-- Output: plain text joins all segments with spaces; with timestamps, one `m:ss text` line each.
+- Output: a header (`Title: ...`, `Channel: ...`, blank line) from the player response's
+  `videoDetails.title` and `videoDetails.author`, so an AI chat knows which video the text is from;
+  it is left out only when the player response is missing. Then plain text joining all segments
+  with spaces; with timestamps, one `m:ss text` line each.
   A segment is what YouTube's transcript panel shows as one line (a sentence or two), not a single
   caption cue, and its timestamp string comes from the response as is.
 - Language: the original spoken language, manual over auto-generated. The `asr` track names the
@@ -64,6 +67,7 @@ pages, with the extension loaded and the button clicked for real (the full manua
 | `--yt-sys-color-baseline--additive-background`, `--yt-sys-color-baseline--text-primary`, `html[dark]` | button colours | verified in the dark theme only |
 | `document.getElementById('movie_player').getPlayerResponse()` | fresh player response after SPA navigation | verified (new video id after two SPA navigations) |
 | `captions.playerCaptionsTracklistRenderer.captionTracks[]` (`languageCode`, `kind: "asr"`), `audioTracks[].defaultCaptionTrackIndex`, `defaultAudioTrackIndex` | track choice, "no captions" state | verified |
+| `videoDetails.title`, `videoDetails.author` in the player response | header of the copied text | fields verified in the console; the copied header not yet checked with the extension loaded |
 | `ytcfg.get('INNERTUBE_CONTEXT')` | request context | verified |
 | `POST /youtubei/v1/get_panel` with `{context, panelId: "PAmodern_transcript_view", params}`, plain `fetch` with only `Content-Type` | the transcript | verified |
 | params protobuf: `149: {1: videoId, 3: 1}`, plain base64 | naming the video | verified: `buildParams` reproduces the captured params byte for byte (unit test) |
@@ -117,7 +121,8 @@ Open a watch page with DevTools.
 
 Load unpacked, open DevTools console, then:
 
-1. Video with manual captions: copies, text matches the manual track in the spoken language.
+1. Video with manual captions: copies, text matches the manual track in the spoken language and
+   starts with the video's title and channel name.
 2. Video with auto-generated captions only: copies.
 3. Video with no captions at all: "No transcript available".
 4. 2h+ video: the line count and the last lines match the end of the video (with timestamps on).

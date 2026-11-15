@@ -82,11 +82,16 @@
     return segments;
   }
 
-  // segments: [{ time: "1:23", text }]
-  function formatTranscript(segments, withTimestamps) {
-    return withTimestamps
+  // segments: [{ time: "1:23", text }]. videoDetails is the player response's videoDetails
+  // (title, author = channel name); with it the text starts with a header naming the video.
+  function formatTranscript(segments, withTimestamps, videoDetails) {
+    const header = videoDetails
+      ? `Title: ${videoDetails.title}\nChannel: ${videoDetails.author}\n\n`
+      : '';
+    const body = withTimestamps
       ? segments.map((s) => `${s.time} ${s.text}`).join('\n')
       : segments.map((s) => s.text).join(' ');
+    return header + body;
   }
 
   const api = { PANEL_ID, pickTrack, buildParams, collectSegments, formatTranscript };

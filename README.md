@@ -30,6 +30,9 @@ right after like/dislike and Share.
 - Red alert icon, "Failed - see console": open DevTools, the error is logged with the
   `[copy-transcript]` prefix.
 
+The copied text starts with two lines, `Title: ...` and `Channel: ...`, so an AI chat knows which
+video the transcript is from.
+
 When a video has several caption languages, the original spoken language is copied, manual captions
 preferred over auto-generated.
 

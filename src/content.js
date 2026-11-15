@@ -123,8 +123,7 @@
   // --- copy ----------------------------------------------------------------------------------
 
   // Returns the segments, or null when the video has no transcript.
-  async function loadSegments(videoId) {
-    const playerResponse = playerResponseFor(videoId);
+  async function loadSegments(videoId, playerResponse) {
     if (!playerResponse) {
       // Without the track list the spoken language is unknown; a video without captions gets
       // an empty response.
@@ -158,14 +157,15 @@
 
     const videoId = currentVideoId();
     setState('busy', 'Copying...');
-    const segments = await loadSegments(videoId);
+    const playerResponse = playerResponseFor(videoId);
+    const segments = await loadSegments(videoId, playerResponse);
     if (currentVideoId() !== videoId) return; // navigated meanwhile, resetForPage already ran
     if (!segments) {
       setState('none', 'No transcript available', true);
       return;
     }
 
-    const text = T.formatTranscript(segments, withTimestamps());
+    const text = T.formatTranscript(segments, withTimestamps(), playerResponse?.videoDetails);
     try {
       await navigator.clipboard.writeText(text);
       setState('copied', `Copied (${segments.length} lines)`, true);

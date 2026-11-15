@@ -88,3 +88,16 @@ test('formatTranscript', () => {
   assert.equal(formatTranscript(segments, false), 'a b');
   assert.equal(formatTranscript(segments, true), '0:00 a\n0:05 b');
 });
+
+test('formatTranscript puts the title and the channel name first when the video is known', () => {
+  const segments = [{ time: '0:00', text: 'a' }, { time: '0:05', text: 'b' }];
+  const videoDetails = { title: 'Do schools kill creativity?', author: 'TED' };
+  assert.equal(
+    formatTranscript(segments, false, videoDetails),
+    'Title: Do schools kill creativity?\nChannel: TED\n\na b',
+  );
+  assert.equal(
+    formatTranscript(segments, true, videoDetails),
+    'Title: Do schools kill creativity?\nChannel: TED\n\n0:00 a\n0:05 b',
+  );
+});
