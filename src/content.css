@@ -1,62 +1,76 @@
-#ytct-root {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 2100;
+/* Mirrors YouTube's round icon buttons in the watch page action row (Share, Save). The colours
+   come from YouTube's own theme variables, with the values seen on 2026-11-15 as fallbacks. */
+#ytct-button {
+  position: relative;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 22px;
-  background: rgba(33, 33, 33, 0.92);
-  color: #fff;
-  font: 500 13px/1 Roboto, Arial, sans-serif;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-
-#ytct-root[hidden] {
-  display: none;
-}
-
-#ytct-button {
-  padding: 9px 16px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 0 0 8px;
+  padding: 0;
   border: 0;
-  border-radius: 18px;
-  background: #fff;
-  color: #0f0f0f;
-  font: inherit;
+  border-radius: 20px;
+  background: var(--yt-sys-color-baseline--additive-background, rgba(0, 0, 0, 0.05));
+  color: var(--yt-sys-color-baseline--text-primary, #0f0f0f);
   cursor: pointer;
+}
+
+html[dark] #ytct-button {
+  background: var(--yt-sys-color-baseline--additive-background, rgba(255, 255, 255, 0.1));
+  color: var(--yt-sys-color-baseline--text-primary, #f1f1f1);
+}
+
+#ytct-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+html[dark] #ytct-button:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 #ytct-button:disabled {
   cursor: progress;
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
-#ytct-root[data-state="copied"] #ytct-button {
-  background: #2ba640;
+#ytct-button svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* The html prefix keeps these above the html[dark] colour rule. */
+html #ytct-button[data-state="copied"] {
+  color: #2ba640;
+}
+
+html #ytct-button[data-state="none"],
+html #ytct-button[data-state="pending"] {
+  color: #f9c23c;
+}
+
+html #ytct-button[data-state="failed"] {
+  color: #e5484d;
+}
+
+/* The result of a click, shown above the button until the state resets. Positioned by
+   content.js at the button's top centre, in page coordinates. */
+#ytct-bubble {
+  position: absolute;
+  z-index: 2100;
+  transform: translate(-50%, calc(-100% - 8px));
+  padding: 8px;
+  border-radius: 4px;
+  background: rgba(97, 97, 97, 0.95);
   color: #fff;
-}
-
-#ytct-root[data-state="none"] #ytct-button,
-#ytct-root[data-state="pending"] #ytct-button {
-  background: #f9c23c;
-}
-
-#ytct-root[data-state="failed"] #ytct-button {
-  background: #e5484d;
-  color: #fff;
-}
-
-#ytct-root label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  user-select: none;
-}
-
-#ytct-root input {
-  margin: 0;
-  cursor: pointer;
+  font: 400 12px/1.2 Roboto, Arial, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
 }

@@ -1,49 +1,95 @@
-// Runs in the page's MAIN world on youtube.com: the button, the transcript request and the
-// clipboard write. MAIN world is required to reach the player API and ytcfg; YouTube enforces
-// Trusted Types, so the DOM is built with createElement/textContent only.
+// Runs in the page's MAIN world on youtube.com: the button in the action row, the transcript
+// request and the clipboard write. MAIN world is required to reach the player API and ytcfg;
+// YouTube enforces Trusted Types, so the DOM is built with createElement/textContent only.
 (() => {
   'use strict';
 
   const T = globalThis.__ytCopyTranscript;
   const LOG = '[copy-transcript]';
-  const TIMESTAMPS_KEY = 'ytct:timestamps';
+  // The like/dislike and Share group of the action row; the button goes right after it, as a
+  // direct child of ytd-menu-renderer, which YouTube keeps across SPA navigation.
+  const ANCHOR_SELECTOR = 'ytd-watch-metadata ytd-menu-renderer > #top-level-buttons-computed';
   const RESET_MS = 3000;
   const IDLE_LABEL = 'Copy transcript';
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const COPY_ICON =
+    'M10 8h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z M4 15V6a2 2 0 0 1 2-2h9';
+  const CHECK_ICON = 'M5 12.5l4.5 4.5L19 7.5';
+  const ALERT_ICON = 'M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 7.5v6 M12 16.5v.01';
+  const STATE_ICONS = {
+    idle: COPY_ICON,
+    busy: COPY_ICON,
+    pending: COPY_ICON,
+    copied: CHECK_ICON,
+    none: ALERT_ICON,
+    failed: ALERT_ICON,
+  };
 
   const currentVideoId = () =>
     location.pathname === '/watch' ? new URLSearchParams(location.search).get('v') : null;
 
+  // Set by settings-bridge.js from the extension settings.
+  const withTimestamps = () => document.documentElement.dataset.ytctTimestamps === '1';
+
   // --- UI ------------------------------------------------------------------------------------
 
-  const root = document.createElement('div');
-  root.id = 'ytct-root';
   const button = document.createElement('button');
   button.id = 'ytct-button';
   button.type = 'button';
-  const label = document.createElement('label');
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = localStorage.getItem(TIMESTAMPS_KEY) === '1';
-  label.append(checkbox, 'timestamps');
-  root.append(button, label);
-  document.body.append(root);
+  const icon = document.createElementNS(SVG_NS, 'svg');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  const iconPath = document.createElementNS(SVG_NS, 'path');
+  icon.append(iconPath);
+  button.append(icon);
+  // Lives in <body>, not in the button: ytd-menu-renderer clips its overflow.
+  const bubble = document.createElement('div');
+  bubble.id = 'ytct-bubble';
 
   let resetTimer = 0;
   // Transcript text fetched but not yet on the clipboard (the write was refused, see copy()).
   let pendingText = null;
 
-  function setState(state, text, autoReset) {
+  function showBubble(message) {
+    const rect = button.getBoundingClientRect();
+    bubble.textContent = message;
+    bubble.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
+    bubble.style.top = `${rect.top + window.scrollY}px`;
+    document.body.append(bubble);
+  }
+
+  // The message is the tooltip and the accessible name; outside idle and busy it is also shown
+  // in a bubble above the button.
+  function setState(state, message, autoReset) {
     clearTimeout(resetTimer);
-    root.dataset.state = state;
-    button.textContent = text;
+    button.dataset.state = state;
+    button.title = message;
+    button.setAttribute('aria-label', message);
+    if (state === 'idle' || state === 'busy') bubble.remove();
+    else showBubble(message);
+    iconPath.setAttribute('d', STATE_ICONS[state]);
     button.disabled = state === 'busy';
     if (autoReset) resetTimer = setTimeout(() => setState('idle', IDLE_LABEL), RESET_MS);
   }
 
+  // YouTube renders the action row some time after the page (or the first watch page of the
+  // session) loads, so the button is inserted when the row appears.
+  const rowObserver = new MutationObserver(mount);
+
+  function mount() {
+    if (button.isConnected || !currentVideoId()) return;
+    const anchor = document.querySelector(ANCHOR_SELECTOR);
+    if (!anchor) return;
+    anchor.after(button);
+    rowObserver.disconnect();
+  }
+
   function resetForPage() {
     pendingText = null;
-    root.hidden = !currentVideoId();
     setState('idle', IDLE_LABEL);
+    if (button.isConnected || !currentVideoId()) return;
+    rowObserver.observe(document.body, { childList: true, subtree: true });
+    mount();
   }
 
   // --- transcript source: innertube get_panel -------------------------------------------------
@@ -119,7 +165,7 @@
       return;
     }
 
-    const text = T.formatTranscript(segments, checkbox.checked);
+    const text = T.formatTranscript(segments, withTimestamps());
     try {
       await navigator.clipboard.writeText(text);
       setState('copied', `Copied (${segments.length} lines)`, true);
@@ -137,12 +183,6 @@
       pendingText = null;
       setState('failed', 'Failed - see console', true);
     });
-  });
-
-  checkbox.addEventListener('change', () => {
-    localStorage.setItem(TIMESTAMPS_KEY, checkbox.checked ? '1' : '0');
-    pendingText = null;
-    setState('idle', IDLE_LABEL);
   });
 
   // YouTube is an SPA: this fires after every in-app navigation, including the first load.

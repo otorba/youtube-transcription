@@ -6,23 +6,38 @@ sync, Web Store publishing. Independent implementation, no code or assets from o
 
 ## Where things live
 
-- `manifest.json` - one content script entry, `world: "MAIN"`, no permissions.
+- `manifest.json` - two content script entries (isolated world for the settings bridge, `world:
+  "MAIN"` for the rest), the `storage` permission, the settings page as toolbar popup and options
+  page.
 - `src/transcript.js` - pure logic, no DOM or network: track choice (`pickTrack`), `get_panel`
   params (`buildParams`), response parsing (`collectSegments`), output (`formatTranscript`). Exposes
   `globalThis.__ytCopyTranscript` in the page and `module.exports` under node.
 - `src/content.js` - the button, the `get_panel` request, clipboard write, SPA navigation handling.
-- `src/content.css` - the floating pill (fixed bottom-right, not injected into YouTube's layout, so
-  layout changes cannot remove it).
+- `src/content.css` - the round icon button in the action row and its message bubble.
+- `src/settings-bridge.js` - isolated world: copies the settings from `chrome.storage.local` to
+  data attributes on `<html>` and keeps them current.
+- `src/options.html`, `src/options.js` - the settings page (one checkbox, "Include timestamps").
 - `test/transcript.test.js` - unit tests for `transcript.js`. Run `node --test`.
 
 Checks: `node --check` on every JS file, `node --test`. Nothing here can exercise live YouTube.
 
 ## Design decisions
 
-- Everything runs in the MAIN world: the player API and `ytcfg` are invisible from the isolated
-  world. Consequences: no `chrome.*` APIs (the timestamps toggle lives in `localStorage`, key
-  `ytct:timestamps`), and YouTube's Trusted Types forbid `innerHTML` - build DOM with
-  `createElement`/`textContent`.
+- The button and the request run in the MAIN world: the player API and `ytcfg` are invisible from
+  the isolated world. Consequences: no `chrome.*` APIs there, and YouTube's Trusted Types forbid
+  `innerHTML` - build DOM with `createElement`/`createElementNS`/`textContent`.
+- Settings live in `chrome.storage.local` (key `timestamps`), not synced. `settings-bridge.js`
+  publishes them as `<html data-ytct-timestamps="1|0">`, which `content.js` reads at click time,
+  so a change in the popup applies to the next click without a reload.
+- The button is one round icon button in the watch page action row, inserted right after
+  `#top-level-buttons-computed` (like/dislike and Share) as a direct child of `ytd-menu-renderer`.
+  It carries its own CSS instead of YouTube's button classes, which were renamed once already;
+  only the two theme colour variables are borrowed, with fallbacks. Inside
+  `#top-level-buttons-computed` YouTube re-renders the children, and `ytd-menu-renderer` clips
+  overflow, so the message bubble is a separate element in `<body>`.
+- Button states: copy icon (idle, dimmed while busy, yellow when a second click is needed), green
+  check (copied), yellow alert (no transcript), red alert (failed). The message is the tooltip, the
+  `aria-label` and, after a click, the bubble above the button for 3 seconds.
 - Output: plain text joins all segments with spaces; with timestamps, one `m:ss text` line each.
   A segment is what YouTube's transcript panel shows as one line (a sentence or two), not a single
   caption cue, and its timestamp string comes from the response as is.
@@ -45,6 +60,8 @@ pages, with the extension loaded and the button clicked for real (the full manua
 | Hook | Used for | Status |
 | --- | --- | --- |
 | `yt-navigate-finish` event on `document` | re-sync button on SPA navigation | verified |
+| `ytd-watch-metadata ytd-menu-renderer > #top-level-buttons-computed` | where the button is inserted | verified: a node inserted after it stays in place across SPA navigation |
+| `--yt-sys-color-baseline--additive-background`, `--yt-sys-color-baseline--text-primary`, `html[dark]` | button colours | verified in the dark theme only |
 | `document.getElementById('movie_player').getPlayerResponse()` | fresh player response after SPA navigation | verified (new video id after two SPA navigations) |
 | `captions.playerCaptionsTracklistRenderer.captionTracks[]` (`languageCode`, `kind: "asr"`), `audioTracks[].defaultCaptionTrackIndex`, `defaultAudioTrackIndex` | track choice, "no captions" state | verified |
 | `ytcfg.get('INNERTUBE_CONTEXT')` | request context | verified |
@@ -92,7 +109,9 @@ Open a watch page with DevTools.
    console, after navigating to a second video without reload, to confirm it is fresh.
 4. Navigation: `document.addEventListener('yt-navigate-finish', () => console.log('nav'))`, then
    click another video.
-5. Update the table above with the new date.
+5. Button missing: inspect the like/dislike row and update `ANCHOR_SELECTOR` in `src/content.js`;
+   compare the size and colours of a native round button (Share, Save) with `src/content.css`.
+6. Update the table above with the new date.
 
 ## Manual checklist (the only real verification)
 
@@ -103,6 +122,10 @@ Load unpacked, open DevTools console, then:
 3. Video with no captions at all: "No transcript available".
 4. 2h+ video: the line count and the last lines match the end of the video (with timestamps on).
 5. Navigate to another video without reloading, click: the new video's transcript, not the old one.
-6. Timestamps checkbox on and off, and that it survives a reload.
+6. Timestamps on and off in the settings popup (toolbar icon): the next click follows it without
+   a page reload, and the setting survives a reload.
 7. No `[copy-transcript]` warning in the console. A warning means the spoken-language request was
    refused or the player response was missing, and the interface language was used instead.
+8. The button sits after Share in the action row, looks like its neighbours in the dark and the
+   light theme, and is still there after navigating to another video and after opening a video
+   from the home page.
