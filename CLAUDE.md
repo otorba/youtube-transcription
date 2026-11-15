@@ -1,7 +1,7 @@
 # Copy YouTube Transcript
 
-Personal unpacked Chrome extension (MV3). One job: on `youtube.com/watch`, a button copies the video's
-transcript to the clipboard. Out of scope, do not add: summaries, AI calls, chat, sidebar UI, settings
+Personal unpacked Chrome extension (MV3). One job: copy a video's transcript to the clipboard, from a
+button on `youtube.com/watch` or from the "More actions" menu of a video card. Out of scope, do not add: summaries, AI calls, chat, sidebar UI, settings
 sync, Web Store publishing. Independent implementation, no code or assets from other extensions.
 
 ## Where things live
@@ -12,8 +12,9 @@ sync, Web Store publishing. Independent implementation, no code or assets from o
 - `src/transcript.js` - pure logic, no DOM or network: track choice (`pickTrack`), `get_panel`
   params (`buildParams`), response parsing (`collectSegments`), output (`formatTranscript`). Exposes
   `globalThis.__ytCopyTranscript` in the page and `module.exports` under node.
-- `src/content.js` - the button, the `get_panel` request, clipboard write, SPA navigation handling.
-- `src/content.css` - the round icon button in the action row and its message bubble.
+- `src/content.js` - the watch page button, the video card menu item, the `get_panel` request,
+  clipboard write, SPA navigation handling. `createCopier` is the copy flow shared by both controls.
+- `src/content.css` - the round icon button in the action row, its message bubble, the menu item.
 - `src/settings-bridge.js` - isolated world: copies the settings from `chrome.storage.local` to
   data attributes on `<html>` and keeps them current.
 - `src/options.html`, `src/options.js` - the settings page (one checkbox, "Include timestamps").
@@ -38,6 +39,17 @@ Checks: `node --check` on every JS file, `node --test`. Nothing here can exercis
 - Button states: copy icon (idle, dimmed while busy, yellow when a second click is needed), green
   check (copied), yellow alert (no transcript), red alert (failed). The message is the tooltip, the
   `aria-label` and, after a click, the bubble above the button for 3 seconds.
+- Video card menu item: "Copy transcript" is appended to the "More actions" menu of a video card
+  (home, subscriptions, the watch page sidebar). YouTube keeps one `yt-list-view-model` for all
+  these menus and refills it per card, and a foreign node in it survives the refill. So a
+  capture-phase click listener removes the item on every click outside it and appends it again
+  only when the click is on a video card's menu button, remembering that card's video id.
+  Playlist and mix cards are skipped: only a video card has `content-id-<videoId>` matching its
+  watch link. The item shows the state in its label, the menu stays open meanwhile and is closed
+  1 second after a copy with `document.body.click()`.
+- A card's video is not playing, so there is no track list: the transcript comes in the interface
+  language, or the video's default track when there is none in it (no `hl` override). The header
+  comes from a `player` request, which answers `UNPLAYABLE` but with `videoDetails`.
 - Output: a header (`Title: ...`, `Channel: ...`, blank line) from the player response's
   `videoDetails.title` and `videoDetails.author`, so an AI chat knows which video the text is from;
   it is left out only when the player response is missing. Then plain text joining all segments
@@ -73,6 +85,10 @@ pages, with the extension loaded and the button clicked for real (the full manua
 | params protobuf: `149: {1: videoId, 3: 1}`, plain base64 | naming the video | verified: `buildParams` reproduces the captured params byte for byte (unit test) |
 | `context.client.hl` | choosing the language track | verified: `en`, `fr`, `uk`, `pt-BR` return that track on a video with 65 tracks; `xx`, `eo`, `ckb` return 400. `zh-CN` and `zh-TW` returned the same track |
 | response: any `transcriptSegmentViewModel` with `simpleText` and `timestamp` (`"0:27"`, `"3:08:07"`) | parsing | verified. Chapter titles are separate `timelineChapterViewModel` nodes |
+| `yt-lockup-view-model` with `.content-id-<videoId>` and `a[href^="/watch"]`, its `.ytLockupMetadataViewModelMenuButton` | video card and its menu button | verified on the subscriptions feed and the watch page sidebar (code injected into the page, see below) |
+| `ytd-popup-container yt-list-view-model` | where the menu item is appended | verified: the same element serves every card, an appended node survives the refill |
+| `POST /youtubei/v1/player` with `{context, videoId}` | title and channel for a card | verified: `UNPLAYABLE`, `videoDetails` present, no `captions`, on 5 videos |
+| `get_panel` without the player (no `hl` override) | transcript for a card | verified on 5 feed videos |
 | response of a video without captions: HTTP 200 with only `responseContext` | (not relied on when the player response is present) | verified |
 
 Findings from the 2026-11-15 browser session:
@@ -87,6 +103,11 @@ Findings from the 2026-11-15 browser session:
   instrumentation), so its DOM was never seen. The panel DOM fallback was removed for that reason.
 - Caption track `baseUrl` (`/api/timedtext`) returned HTTP 200 with an empty body from curl. It
   needs a proof-of-origin token, so it is not used.
+- The card menu item was checked by injecting `content.js` and its CSS into the page, because the
+  loaded extension still ran the old files: the item looked native in the dark theme, a real
+  click copied 61 lines with the header and the menu closed. Not checked: the light theme, search
+  results (`ytd-video-renderer`, an older menu, not supported), the item with the extension
+  itself reloaded, and the watch page button after the `createCopier` refactoring.
 - Not checked live: a video whose spoken language has both a manual track in another language and
   an `asr` track only (the `hl` override should pick the `asr` one), and the 400 retry on a real
   `eo`/`ckb` video.
@@ -131,6 +152,9 @@ Load unpacked, open DevTools console, then:
    a page reload, and the setting survives a reload.
 7. No `[copy-transcript]` warning in the console. A warning means the spoken-language request was
    refused or the player response was missing, and the interface language was used instead.
-8. The button sits after Share in the action row, looks like its neighbours in the dark and the
+8. On the home or subscriptions page, a video card's three-dot menu ends with "Copy transcript":
+   it copies that video's transcript with its title and channel, then the menu closes. The same
+   in the watch page sidebar. A playlist or mix card's menu has no such item.
+9. The button sits after Share in the action row, looks like its neighbours in the dark and the
    light theme, and is still there after navigating to another video and after opening a video
    from the home page.

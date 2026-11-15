@@ -35,7 +35,9 @@ html[dark] #ytct-button:hover {
   opacity: 0.5;
 }
 
-#ytct-button svg {
+#ytct-button svg,
+#ytct-menu-item svg {
+  flex: none;
   width: 24px;
   height: 24px;
   fill: none;
@@ -46,17 +48,56 @@ html[dark] #ytct-button:hover {
   pointer-events: none;
 }
 
-/* The html prefix keeps these above the html[dark] colour rule. */
-html #ytct-button[data-state="copied"] {
+/* The item in the "More actions" menu of a video card. Mirrors the native items of
+   yt-list-view-model (40px rows, 24px icon, 14px text) as seen on 2026-11-15. */
+#ytct-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  background: none;
+  color: var(--yt-sys-color-baseline--text-primary, #0f0f0f);
+  font: 400 14px/20px Roboto, Arial, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+html[dark] #ytct-menu-item {
+  color: var(--yt-sys-color-baseline--text-primary, #f1f1f1);
+}
+
+#ytct-menu-item:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+html[dark] #ytct-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#ytct-menu-item:disabled {
+  cursor: progress;
+  opacity: 0.5;
+}
+
+/* The html prefix keeps these above the html[dark] colour rules. In the menu item only the
+   icon takes the state colour, the text stays readable. */
+html #ytct-button[data-state="copied"],
+html #ytct-menu-item[data-state="copied"] svg {
   color: #2ba640;
 }
 
 html #ytct-button[data-state="none"],
-html #ytct-button[data-state="pending"] {
+html #ytct-button[data-state="pending"],
+html #ytct-menu-item[data-state="none"] svg,
+html #ytct-menu-item[data-state="pending"] svg {
   color: #f9c23c;
 }
 
-html #ytct-button[data-state="failed"] {
+html #ytct-button[data-state="failed"],
+html #ytct-menu-item[data-state="failed"] svg {
   color: #e5484d;
 }
 
