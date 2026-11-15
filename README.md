@@ -18,7 +18,7 @@ On a `youtube.com/watch` page a "Copy transcript" pill sits in the bottom-right 
 
 - Click it: the full transcript goes to the clipboard, the button turns green and shows the line count.
 - "timestamps" checkbox: off gives plain flowing text (best for pasting into an AI chat), on gives
-  one `m:ss text` line per caption. The choice is remembered.
+  one `m:ss text` line per transcript line. The choice is remembered.
 - "No transcript available": the video has no captions at all, not even auto-generated.
 - "Ready - click again to copy": the transcript was fetched but Chrome refused the clipboard write
   (slow fetch or the tab lost focus). Click once more.
