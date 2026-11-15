@@ -3,7 +3,7 @@
 (() => {
   'use strict';
 
-  const PANEL_ID = 'engagement-panel-searchable-transcript-search-panel';
+  const PANEL_ID = 'PAmodern_transcript_view';
 
   // --- track choice -------------------------------------------------------------------------
 
@@ -29,7 +29,7 @@
     return tracks[audio?.defaultCaptionTrackIndex ?? 0] ?? tracks[0];
   }
 
-  // --- get_transcript params (protobuf, base64) ----------------------------------------------
+  // --- get_panel params (protobuf, base64) ---------------------------------------------------
 
   const utf8 = new TextEncoder();
 
@@ -43,46 +43,24 @@
     return out;
   }
 
-  const stringField = (field, value) => {
-    const bytes = utf8.encode(value);
-    return [...varint((field << 3) | 2), ...varint(bytes.length), ...bytes];
-  };
+  const bytesField = (field, bytes) => [...varint((field << 3) | 2), ...varint(bytes.length), ...bytes];
   const varintField = (field, value) => [...varint(field << 3), ...varint(value)];
-  const base64 = (bytes) => encodeURIComponent(btoa(String.fromCharCode(...bytes)));
 
-  // Mirrors the params YouTube puts in ytInitialData for its own transcript panel:
-  //   1: videoId, 2: base64({1: kind, 2: languageCode, 3: track name}), 3: 1, 5: panel id, 6: 0, 7: 1, 8: 1
-  function buildParams(videoId, track) {
-    const trackRef = base64([
-      ...stringField(1, track.kind ?? ''),
-      ...stringField(2, track.languageCode),
-      ...stringField(3, track.trackName ?? ''),
-    ]);
-    return base64([
-      ...stringField(1, videoId),
-      ...stringField(2, trackRef),
-      ...varintField(3, 1),
-      ...stringField(5, PANEL_ID),
-      ...varintField(6, 0),
-      ...varintField(7, 1),
-      ...varintField(8, 1),
-    ]);
+  // Mirrors the params YouTube sends when its own "Show transcript" button loads the panel:
+  //   149: { 1: videoId, 3: 1 }
+  // The language is not part of the params, it follows context.client.hl of the request.
+  function buildParams(videoId) {
+    const message = bytesField(149, [...bytesField(1, utf8.encode(videoId)), ...varintField(3, 1)]);
+    return btoa(String.fromCharCode(...message));
   }
 
   // --- response parsing ----------------------------------------------------------------------
 
-  function formatTime(ms) {
-    const total = Math.floor(ms / 1000);
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = String(total % 60).padStart(2, '0');
-    return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
-  }
-
   const cleanText = (text) => text.replace(/\s+/g, ' ').trim();
 
-  // Collects every transcriptSegmentRenderer wherever it sits, in document order, so a change
-  // in the wrappers around the segment list does not break parsing.
+  // Collects every transcriptSegmentViewModel wherever it sits, in document order, so a change
+  // in the wrappers around the segment list does not break parsing. Chapter titles are separate
+  // timelineChapterViewModel nodes and are left out.
   function collectSegments(response) {
     const segments = [];
     const visit = (node) => {
@@ -92,13 +70,12 @@
       }
       if (!node || typeof node !== 'object') return;
       for (const [key, value] of Object.entries(node)) {
-        if (key !== 'transcriptSegmentRenderer') {
+        if (key !== 'transcriptSegmentViewModel') {
           visit(value);
           continue;
         }
-        const snippet = value.snippet ?? {};
-        const text = cleanText(snippet.simpleText ?? (snippet.runs ?? []).map((r) => r.text).join(''));
-        if (text) segments.push({ time: formatTime(Number(value.startMs)), text });
+        const text = cleanText(value.simpleText ?? '');
+        if (text) segments.push({ time: value.timestamp, text });
       }
     };
     visit(response);
@@ -112,7 +89,7 @@
       : segments.map((s) => s.text).join(' ');
   }
 
-  const api = { pickTrack, buildParams, collectSegments, formatTranscript, formatTime, cleanText };
+  const api = { PANEL_ID, pickTrack, buildParams, collectSegments, formatTranscript };
   if (typeof module !== 'undefined') module.exports = api;
   else globalThis.__ytCopyTranscript = api;
 })();

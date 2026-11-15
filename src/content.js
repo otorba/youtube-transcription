@@ -1,4 +1,4 @@
-// Runs in the page's MAIN world on youtube.com: the button, the two transcript sources and the
+// Runs in the page's MAIN world on youtube.com: the button, the transcript request and the
 // clipboard write. MAIN world is required to reach the player API and ytcfg; YouTube enforces
 // Trusted Types, so the DOM is built with createElement/textContent only.
 (() => {
@@ -7,11 +7,6 @@
   const T = globalThis.__ytCopyTranscript;
   const LOG = '[copy-transcript]';
   const TIMESTAMPS_KEY = 'ytct:timestamps';
-  const PANEL_SELECTOR =
-    'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-searchable-transcript"]';
-  const SEGMENT_SELECTOR = 'ytd-transcript-segment-renderer';
-  const OPENER_SELECTOR = 'ytd-video-description-transcript-section-renderer button';
-  const PANEL_TIMEOUT_MS = 8000;
   const RESET_MS = 3000;
   const IDLE_LABEL = 'Copy transcript';
 
@@ -51,7 +46,7 @@
     setState('idle', IDLE_LABEL);
   }
 
-  // --- source 1: innertube get_transcript ----------------------------------------------------
+  // --- transcript source: innertube get_panel -------------------------------------------------
 
   // The player API returns the response of the video that is playing now, unlike
   // window.ytInitialPlayerResponse, which keeps the first video after SPA navigation.
@@ -60,53 +55,23 @@
     return response?.videoDetails?.videoId === videoId ? response : null;
   }
 
-  async function fetchFromInnertube(videoId, track) {
+  // The request YouTube's own "Show transcript" button sends. The transcript comes in the
+  // language of context.client.hl when the video has a track in it, otherwise in the video's
+  // default track; hl undefined keeps the interface language.
+  async function fetchPanel(videoId, hl) {
     const context = window.ytcfg?.get?.('INNERTUBE_CONTEXT');
     if (!context) throw new Error('ytcfg INNERTUBE_CONTEXT is missing');
-    const response = await fetch('/youtubei/v1/get_transcript?prettyPrint=false', {
+    const response = await fetch('/youtubei/v1/get_panel?prettyPrint=false', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context, params: T.buildParams(videoId, track) }),
+      body: JSON.stringify({
+        context: hl ? { ...context, client: { ...context.client, hl } } : context,
+        panelId: T.PANEL_ID,
+        params: T.buildParams(videoId),
+      }),
     });
-    if (!response.ok) throw new Error(`get_transcript returned HTTP ${response.status}`);
-    const segments = T.collectSegments(await response.json());
-    if (!segments.length) throw new Error('get_transcript returned no segments');
-    return segments;
-  }
-
-  // --- source 2: YouTube's own transcript panel ----------------------------------------------
-
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // Returns null when the page has no transcript panel, which YouTube only renders for videos
-  // that have a transcript.
-  async function readFromPanel(videoId) {
-    const panel = document.querySelector(PANEL_SELECTOR);
-    if (!panel) return null;
-
-    const openedByUs = !panel.querySelector(SEGMENT_SELECTOR);
-    if (openedByUs) {
-      const opener = document.querySelector(OPENER_SELECTOR);
-      if (opener) opener.click();
-      else panel.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_EXPANDED');
-    }
-
-    const deadline = Date.now() + PANEL_TIMEOUT_MS;
-    while (!panel.querySelector(SEGMENT_SELECTOR)) {
-      if (Date.now() > deadline) throw new Error('transcript panel did not load any segments');
-      if (currentVideoId() !== videoId) throw new Error('navigated away while the panel was loading');
-      await sleep(200);
-    }
-
-    const segments = [];
-    for (const node of panel.querySelectorAll(SEGMENT_SELECTOR)) {
-      const text = T.cleanText(node.querySelector('.segment-text')?.textContent ?? '');
-      const time = T.cleanText(node.querySelector('.segment-timestamp')?.textContent ?? '');
-      if (text) segments.push({ time, text });
-    }
-    if (openedByUs) panel.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_HIDDEN');
-    if (!segments.length) throw new Error('transcript panel segments had no text');
-    return segments;
+    if (!response.ok) throw new Error(`get_panel returned HTTP ${response.status}`);
+    return T.collectSegments(await response.json());
   }
 
   // --- copy ----------------------------------------------------------------------------------
@@ -114,18 +79,26 @@
   // Returns the segments, or null when the video has no transcript.
   async function loadSegments(videoId) {
     const playerResponse = playerResponseFor(videoId);
-    if (playerResponse) {
-      const track = T.pickTrack(playerResponse.captions?.playerCaptionsTracklistRenderer);
-      if (!track) return null;
-      try {
-        return await fetchFromInnertube(videoId, track);
-      } catch (error) {
-        console.warn(LOG, 'get_transcript failed, reading the transcript panel instead:', error);
-      }
-    } else {
-      console.warn(LOG, 'no player response for this video, reading the transcript panel instead');
+    if (!playerResponse) {
+      // Without the track list the spoken language is unknown; a video without captions gets
+      // an empty response.
+      console.warn(LOG, 'no player response for this video, using the interface language');
+      const segments = await fetchPanel(videoId);
+      return segments.length ? segments : null;
     }
-    return readFromPanel(videoId);
+
+    const track = T.pickTrack(playerResponse.captions?.playerCaptionsTracklistRenderer);
+    if (!track) return null;
+    let segments;
+    try {
+      segments = await fetchPanel(videoId, track.languageCode);
+    } catch (error) {
+      // A caption language that is not a YouTube interface language (eo, ckb) gets HTTP 400.
+      console.warn(LOG, `get_panel refused hl=${track.languageCode}, using the interface language:`, error);
+      segments = await fetchPanel(videoId);
+    }
+    if (!segments.length) throw new Error('get_panel returned no segments');
+    return segments;
   }
 
   async function copy() {
