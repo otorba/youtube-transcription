@@ -67,7 +67,7 @@ pages, with the extension loaded and the button clicked for real (the full manua
 | `--yt-sys-color-baseline--additive-background`, `--yt-sys-color-baseline--text-primary`, `html[dark]` | button colours | verified in the dark theme only |
 | `document.getElementById('movie_player').getPlayerResponse()` | fresh player response after SPA navigation | verified (new video id after two SPA navigations) |
 | `captions.playerCaptionsTracklistRenderer.captionTracks[]` (`languageCode`, `kind: "asr"`), `audioTracks[].defaultCaptionTrackIndex`, `defaultAudioTrackIndex` | track choice, "no captions" state | verified |
-| `videoDetails.title`, `videoDetails.author` in the player response | header of the copied text | fields verified in the console; the copied header not yet checked with the extension loaded |
+| `videoDetails.title`, `videoDetails.author` in the player response | header of the copied text | verified |
 | `ytcfg.get('INNERTUBE_CONTEXT')` | request context | verified |
 | `POST /youtubei/v1/get_panel` with `{context, panelId: "PAmodern_transcript_view", params}`, plain `fetch` with only `Content-Type` | the transcript | verified |
 | params protobuf: `149: {1: videoId, 3: 1}`, plain base64 | naming the video | verified: `buildParams` reproduces the captured params byte for byte (unit test) |
