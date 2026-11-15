@@ -52,11 +52,14 @@ Findings from the 2026-11-15 probe:
 
 - Caption track `baseUrl` (`/api/timedtext`), with or without `&fmt=json3`, returned HTTP 200 with an
   empty body. It needs a proof-of-origin token, so it is not used.
-- A bare curl call to `get_transcript` (no cookies, minimal context) returned 400
-  `FAILED_PRECONDITION`. Whether the in-page call with the full `INNERTUBE_CONTEXT` and session
-  cookies succeeds is the first thing to check in the browser. If it fails, the console shows
-  `[copy-transcript] get_transcript failed, reading the transcript panel instead` and the panel
-  fallback does the work.
+- curl calls to `get_transcript` returned 400 `FAILED_PRECONDITION` twice: with a minimal context,
+  and with the page's full `INNERTUBE_CONTEXT`, its `visitorData`, the page's cookies and the
+  `X-Youtube-Client-*` headers, all logged out. That second request is close to what
+  `fetchFromInnertube` sends, so the endpoint wants something a plain replay lacks (a signed-in
+  session or an attestation token). Expect the primary source to fail at least when logged out;
+  whether it works signed in is the first thing to check in the browser. On failure the console
+  shows `[copy-transcript] get_transcript failed, reading the transcript panel instead` and the
+  panel fallback does the work.
 - `ytInitialData` also mentions a `PAmodern_transcript_view` panel, a sign of a newer transcript UI
   that may not use `ytd-transcript-segment-renderer`.
 
